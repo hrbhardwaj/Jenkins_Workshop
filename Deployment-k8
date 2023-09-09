@@ -1,0 +1,78 @@
+pipeline {
+    agent any
+
+    environment {
+        // Set environment variables like registry credentials, cluster config, etc.
+        KUBECONFIG = credentials('your-kubeconfig-credential-id')
+        DOCKER_REGISTRY_CREDENTIALS = credentials('your-docker-registry-credential-id')
+        APP_NAME = 'my-app'
+        IMAGE_TAG = "${env.BUILD_NUMBER}" // You can use a more meaningful tag
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                // Checkout your source code from version control (e.g., Git)
+                checkout scm
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                // Build and tag the Docker image
+                script {
+                    def dockerImage = docker.build("${DOCKER_REGISTRY_URL}/${APP_NAME}:${IMAGE_TAG}")
+                }
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                // Push the Docker image to your registry
+                script {
+                    docker.withRegistry("${DOCKER_REGISTRY_URL}", "${DOCKER_REGISTRY_CREDENTIALS}") {
+                        dockerImage.push()
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                // Deploy to Kubernetes using kubectl
+                script {
+                    sh "kubectl --kubeconfig=${KUBECONFIG} apply -f kubernetes-manifests/"
+                    sh "kubectl --kubeconfig=${KUBECONFIG} rollout status deployment/${APP_NAME} -n ${NAMESPACE}"
+                }
+            }
+        }
+
+        stage('Cleanup') {
+            steps {
+                // Clean up resources if needed
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Deployment successful!'
+        }
+        failure {
+            echo 'Deployment failed!'
+        }
+    }
+}
+==============================================================================================================
+In this Jenkinsfile:
+
+* We define environment variables for Kubernetes configuration (KUBECONFIG), Docker registry credentials (DOCKER_REGISTRY_CREDENTIALS), your application's name (APP_NAME), 
+   and the image tag.
+* There are stages for checking out your source code, building a Docker image, pushing it to a container registry, deploying it to Kubernetes, and cleaning up any resources.
+* In the "Deploy to Kubernetes" stage, we use kubectl to apply the Kubernetes manifests for your application, and we also wait for the deployment to complete.
+* In the post section, we define actions to take based on the success or failure of the pipeline.
+
+
+Important point :
+    Make sure to replace the placeholders (your-kubeconfig-credential-id, your-docker-registry-credential-id, DOCKER_REGISTRY_URL, NAMESPACE, etc.) with your actual values and 
+adjust the pipeline as needed for your specific application and deployment requirements.
